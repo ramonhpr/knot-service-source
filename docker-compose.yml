@@ -1,0 +1,38 @@
+version: '3'
+services:
+  knotd:
+    build: .
+    image: knot/knotd
+    depends_on:
+      - 'fog'
+    container_name: knot-service
+    security_opt:
+      - seccomp=unconfined
+    tmpfs:
+      - /run
+      - /run/lock
+    environment:
+      - FOG_HOST
+      - FOG_PORT
+    ports:
+      - '8884:8884'
+      - '8886:8886'
+      - '55556:55556'
+    expose:
+      - 8884
+      - 8886
+      - 55556
+#    volumes:
+ #     - /tmp/dbus/:/var/run/dbus/
+  fog:
+    image: cesarbr/knot-cloud
+    depends_on:
+      - 'database'
+    environment:
+      - DB_NAME=knot_fog
+    expose:
+      - '3000'
+  database:
+    image: mongo
+    expose:
+      - '27017'

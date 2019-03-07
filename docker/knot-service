@@ -1,0 +1,24 @@
+#!/bin/sh
+
+FOG_HOST=${FOG_HOST:=fog}
+FOG_PORT=${FOG_PORT:=3000}
+
+# wait until cloud is up
+while ! curl -Is http://$FOG_HOST:$FOG_PORT/status ; do echo "waiting for fog: http://$FOG_HOST:$FOG_PORT"; sleep 1; done
+if [ ! -f user.json ]; then
+	# create a device as user
+	curl -X POST http://$FOG_HOST:$FOG_PORT/devices -d 'type=user' > user.json &&
+	UUID=`python2 -c "import json;print json.load(file('./user.json'))['uuid']"` &&
+	TOKEN=`python2 -c "import json;print json.load(file('./user.json'))['token']"` &&
+	# add the device on the storage
+	sed -i "/Uuid/c\Uuid=$UUID" /etc/knot/knotd.conf &&
+	sed -i "/Token/c\Token=$TOKEN" /etc/knot/knotd.conf
+fi
+
+# run dbus-daemon
+mkdir -p /var/run/dbus/
+dbus-daemon --system
+
+# run knotd and inetbrd
+inetbrd -n &
+knotd -n -r -h $FOG_HOST -p $FOG_PORT
