@@ -12,7 +12,7 @@ such as Bluetooth Low Energy, and Wi-Fi are planned.
 Dependencies:
 - knot-protocol-source
 - knot-hal-source
-- ell >= 0.4
+- ell >= 1.7
 - glib >= 2.56.1
 - json-c v0.13.1
 - automake
