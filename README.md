@@ -21,6 +21,40 @@ Dependencies:
 - libssl-dev
 - valgrind (optional)
 
+## How to run with Docker
+
+### Quick run and build
+
+`$ docker-compose up --build`
+
+### Custom Build and Run
+To build images:
+
+`$ docker-compose build`
+
+You can also use the options `--build-arg ENV=value` to install other dependencies versions.
+
+The build arguments available are:
+
+* `GLIB_VERSION`             (Default: 2.56.1)
+* `JSONC_VERSION`            (Default: 0.13.1-20180305)
+* `LIBWEBSOCKETS_VERSION`    (Default: v2.4.2)
+* `KNOT_PROTOCOL_VERSION`    (Default: KNOT-v01.04-rc02)
+* `KNOT_HAL_VERSION`         (Default: KNOT-v01.04-rc02)
+
+Run the containers:
+
+`$ docker-compose up`
+
+It's possible to connect to a other fog using the following environment variables
+* `FOG_HOST` fog server hostname to knotd connect (Default: fog)
+* `FOG_PORT` fog server port to knotd connect (Default: 3000)
+
+Note: The container will expose a dbus address to connect with at: `tcp:host=localhost,port=55556`
+
+In the following link you can see how to work with another DBus remotely:
+https://serverfault.com/questions/414350/access-d-bus-remotely-using-socat
+
 ## How to install dependencies:
 
 `$ sudo apt-get install pkg-config autoconf automake libtool dbus libdbus-1-dev`
