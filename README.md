@@ -13,7 +13,7 @@ Dependencies:
 - knot-protocol-source
 - knot-hal-source
 - ell >= 0.4
-- glib >= 2.28
+- glib >= 2.56.1
 - json-c v0.13.1
 - automake
 - libtool
@@ -23,7 +23,15 @@ Dependencies:
 
 ## How to install dependencies:
 
-`$ sudo apt-get install automake libtool libssl-dev valgrind`
+`$ sudo apt-get install pkg-config autoconf automake libtool dbus libdbus-1-dev`
+
+### Install glib
+To install glib first you need to install the following packages:
+`$ sudo apt-get install zlib1g-dev libffi-dev libmount-dev libpcre3-dev gettext python`
+
+After install them, install the glib version >= 2.56.1
+https://github.com/GNOME/glib/releases
+
 
 ### Install libwebsockets
 To install libwebsockets first you need to install cmake (https://cmake.org/install/)
