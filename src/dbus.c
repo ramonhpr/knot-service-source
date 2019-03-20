@@ -96,14 +96,18 @@ struct l_dbus *dbus_get_bus(void)
 	return g_dbus;
 }
 
-int dbus_start(dbus_setup_completed_func_t setup_cb, void *user_data)
+int dbus_start(const char* address, dbus_setup_completed_func_t setup_cb, void *user_data)
 {
 
 	setup = l_new(struct setup, 1);
 	setup->complete = setup_cb;
 	setup->user_data = user_data;
 
-	g_dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+	if (strlen(address) == 0) {
+		g_dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+	} else {
+		g_dbus = l_dbus_new(address);
+	}
 
 	l_dbus_set_ready_handler(g_dbus, dbus_ready_callback, setup, NULL);
 

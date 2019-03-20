@@ -31,7 +31,7 @@ struct l_dbus_message *dbus_error_failed(struct l_dbus_message *msg,
 					  const char *str);
 
 typedef void (*dbus_setup_completed_func_t) (void *user_data);
-int dbus_start(dbus_setup_completed_func_t setup_cb, void *user_data);
+int dbus_start(const char* address, dbus_setup_completed_func_t setup_cb, void *user_data);
 void dbus_stop(void);
 
 struct l_dbus *dbus_get_bus(void);

@@ -21,6 +21,7 @@
 
 struct settings {
 	const char *config_path;
+	const char *dbus_address;
 	int configfd;
 
 	char *host;

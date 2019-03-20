@@ -258,7 +258,7 @@ int manager_start(struct settings *settings)
 {
 	int err;
 
-	err = dbus_start(setup_complete, settings);
+	err = dbus_start(settings->dbus_address, setup_complete, settings);
 	if (err)
 		hal_log_error("dbus_start(): %s", strerror(-err));
 

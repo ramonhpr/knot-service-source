@@ -40,6 +40,7 @@
 #define DEFAULT_HOST			"localhost"
 #define DEFAULT_PORT			3000
 #define DEFAULT_PROTO			"ws"
+#define DEFAULT_ADDRESS 		""
 
 static bool detach = true;
 static bool help = false;
@@ -56,6 +57,7 @@ static void usage(void)
 		"\t-P, --proto             Protocol used to communicate with cloud server: socketio, ws\n"
 		"\t-n, --nodetach          Disable running in background\n"
 		"\t-r, --user-root	   Run as root(default is knot)\n"
+		"\t-A, --dbus-address	   Connect to another dbus address (default is system bus)\n"
 		"\t-H, --help              Show help options\n");
 }
 
@@ -66,6 +68,7 @@ static const struct option main_options[] = {
 	{ "proto",		required_argument,	NULL, 'P' },
 	{ "nodetach",		no_argument,		NULL, 'n' },
 	{ "user-root",		no_argument,		NULL, 'r' },
+	{ "dbus-address",	no_argument,		NULL, 'A' },
 	{ "help",		no_argument,		NULL, 'H' },
 	{ }
 };
@@ -75,7 +78,7 @@ static int parse_args(int argc, char *argv[], struct settings *settings)
 	int opt;
 
 	for (;;) {
-		opt = getopt_long(argc, argv, "c:h:p:P:nrbH",
+		opt = getopt_long(argc, argv, "c:h:p:P:A:nrbH",
 				  main_options, NULL);
 		if (opt < 0)
 			break;
@@ -86,6 +89,9 @@ static int parse_args(int argc, char *argv[], struct settings *settings)
 			break;
 		case 'h':
 			settings->host = l_strdup(optarg);
+			break;
+		case 'A':
+			settings->dbus_address = l_strdup(optarg);
 			break;
 		case 'p':
 			settings->port = atoi(optarg);
@@ -128,6 +134,7 @@ struct settings *settings_load(int argc, char *argv[])
 	settings = l_new(struct settings, 1);
 
 	settings->config_path = DEFAULT_CONFIG_PATH;
+	settings->dbus_address = DEFAULT_ADDRESS;
 	settings->configfd = -1;
 	settings->host = NULL;
 	settings->port = UINT32_MAX;
