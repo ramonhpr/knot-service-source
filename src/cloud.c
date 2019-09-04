@@ -116,6 +116,12 @@ static bool cloud_receive_message(const char *exchange,
 	return true;
 }
 
+int cloud_register_device(const char *id, const char *name)
+{
+	// TODO: register device
+	return 0;
+}
+
 int cloud_unregister_device(const char *id)
 {
 	json_object *jobj;
