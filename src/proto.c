@@ -174,28 +174,6 @@ done:
 	l_free(json.data);
 }
 
-static json_object *device_json_create(const char *owner_uuid,
-				       const char *device_name,
-				       const char *device_id)
-{
-	json_object *device;
-
-	device = json_object_new_object();
-	if (!device)
-		return NULL;
-
-	json_object_object_add(device, "type",
-			       json_object_new_string("KNOTDevice"));
-	json_object_object_add(device, "name",
-			       json_object_new_string(device_name));
-	json_object_object_add(device, "id",
-			       json_object_new_string(device_id));
-	json_object_object_add(device, "owner",
-			       json_object_new_string(owner_uuid));
-
-	return device;
-}
-
 static json_object *schema_create_object(uint8_t sensor_id, uint8_t value_type,
 					 uint8_t unit, uint16_t type_id,
 					 const char *name)
