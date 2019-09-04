@@ -51,6 +51,7 @@
 #define AMQP_EVENT_DATA_UPDATE "data.update"
 #define AMQP_EVENT_DATA_REQUEST "data.request"
 #define AMQP_EVENT_DEVICE_UNREGISTERED "device.unregistered"
+#define AMQP_EVENT_DEVICE_REGISTERED "device.registered"
 
  /* Northbound traffic (control, measurements) */
 #define AMQP_CMD_DATA_PUBLISH "data.publish"
@@ -61,9 +62,23 @@ struct cloud_callbacks {
 	cloud_downstream_cb_t update_cb;
 	cloud_downstream_cb_t request_cb;
 	cloud_device_removed_cb_t removed_cb;
+	cloud_device_added_cb_t added_cb;
 };
 
 static struct cloud_callbacks cloud_cbs;
+
+static const char *get_token_from_jobj(json_object *jso)
+{
+	json_object *jobjkey;
+
+	if (!json_object_object_get_ex(jso, "token", &jobjkey))
+		return false;
+
+	if (json_object_get_type(jobjkey) != json_type_string)
+		return false;
+
+	return json_object_get_string(jobjkey);
+}
 
 static bool cloud_receive_message(const char *exchange,
 				  const char *routing_key,
@@ -72,7 +87,7 @@ static bool cloud_receive_message(const char *exchange,
 	json_object *jso;
 	json_object *id_json;
 	struct l_queue *list;
-	const char *id;
+	const char *id, *token;
 
 	if (strcmp(AMQP_EXCHANGE_FOG, exchange) != 0)
 		return true;
@@ -111,6 +126,15 @@ static bool cloud_receive_message(const char *exchange,
 	if (cloud_cbs.removed_cb != NULL &&
 	    strcmp(AMQP_EVENT_DEVICE_UNREGISTERED, routing_key) == 0) {
 		cloud_cbs.removed_cb(id, user_data);
+	}
+
+	if (cloud_cbs.added_cb != NULL &&
+	    strcmp(AMQP_EVENT_DEVICE_REGISTERED, routing_key) == 0) {
+		token = get_token_from_jobj(jso);
+		if (!token)
+			return false;
+
+		cloud_cbs.added_cb(id, token, user_data);
 	}
 
 	json_object_put(jso);
@@ -180,12 +204,14 @@ int cloud_publish_data(const char *id, uint8_t sensor_id, uint8_t value_type,
 int cloud_set_cbs(cloud_downstream_cb_t on_update,
 		  cloud_downstream_cb_t on_request,
 		  cloud_device_removed_cb_t on_removed,
+		  cloud_device_added_cb_t on_added,
 		  void *user_data)
 {
 	static const char * const fog_events[] = {
 		AMQP_EVENT_DATA_UPDATE,
 		AMQP_EVENT_DATA_REQUEST,
 		AMQP_EVENT_DEVICE_UNREGISTERED,
+		AMQP_EVENT_DEVICE_REGISTERED,
 		NULL
 	};
 	amqp_bytes_t queue_fog;
@@ -195,6 +221,7 @@ int cloud_set_cbs(cloud_downstream_cb_t on_update,
 	cloud_cbs.update_cb = on_update;
 	cloud_cbs.request_cb = on_request;
 	cloud_cbs.removed_cb = on_removed;
+	cloud_cbs.added_cb = on_added;
 
 	queue_fog = amqp_declare_new_queue(AMQP_QUEUE_FOG);
 	if (queue_fog.bytes == NULL) {
