@@ -55,6 +55,7 @@
  /* Northbound traffic (control, measurements) */
 #define AMQP_CMD_DATA_PUBLISH "data.publish"
 #define AMQP_CMD_DEVICE_UNREGISTER "device.unregister"
+#define AMQP_CMD_DEVICE_REGISTER "device.register"
 
 struct cloud_callbacks {
 	cloud_downstream_cb_t update_cb;
@@ -118,8 +119,21 @@ static bool cloud_receive_message(const char *exchange,
 
 int cloud_register_device(const char *id, const char *name)
 {
-	// TODO: register device
-	return 0;
+	json_object *jobj_device;
+	const char *json_str;
+	int result;
+
+	jobj_device = parser_device_json_create(id, name);
+	json_str = json_object_to_json_string(jobj_device);
+	result = amqp_publish_persistent_message(AMQP_EXCHANGE_CLOUD,
+						 AMQP_CMD_DEVICE_REGISTER,
+						 json_str);
+	if (result < 0)
+		result = KNOT_ERR_CLOUD_FAILURE;
+
+	json_object_put(jobj_device);
+
+	return result;
 }
 
 int cloud_unregister_device(const char *id)
