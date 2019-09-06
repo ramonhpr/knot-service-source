@@ -548,12 +548,14 @@ static int8_t msg_register(struct session *session,
 		return result;
 
 	mydevice->id = l_strdup(id);
+	mydevice->uuid = l_strdup(id);
 	mydevice->name = l_strdup(device_name);
 	mydevice->online = false;
 
 	// Pending devices to be registered
 	l_queue_push_head(device_id_list, mydevice);
 
+	session->id = kreq->id;
 	session->rollback = 1; /* Initial counter value */
 
 	return 0;
@@ -929,15 +931,13 @@ static ssize_t msg_process(struct session *session,
 	case KNOT_MSG_REG_REQ:
 		/* Payload length is set by the caller */
 		result = msg_register(session, &kreq->reg, ilen, &krsp->cred);
-		rtype = KNOT_MSG_REG_RSP;
 		if (result != 0)
 			break;
-
-		/* Enable downstream after registration & authentication */
 		session->downstream_to =
 			l_timeout_create_ms(512,
 					    downstream_callback,
 					    session, NULL);
+		return 0;
 		break;
 	case KNOT_MSG_UNREG_REQ:
 		result = msg_unregister(session);
@@ -1282,6 +1282,25 @@ static void on_device_added(const char *device_id, const char *token,
 	struct mydevice *mydevice = l_queue_find(device_id_list,
 						 device_id_cmp,
 						 device_id);
+	struct session *session = l_queue_find(session_list, session_id_cmp,
+					       device_id);
+	const struct node_ops *node_ops;
+	knot_msg_credential msg;
+	ssize_t olen, osent;
+	void *opdu;
+	int err;
+
+	if (!session) {
+		hal_log_dbg("Session not found");
+		/*
+		 * TODO: send a nack to amqp so the same message can be handled
+		 * later
+		 */
+		return;
+	}
+
+	node_ops = session->node_ops;
+
 
 	/* Tracks 'proxy' devices that belongs to Cloud. */
 	hal_log_info("Device added: %s", device_id);
@@ -1296,10 +1315,27 @@ static void on_device_added(const char *device_id, const char *token,
 			return;
 	}
 
-	// TODO: Authenticate device on cloud
-	// FIXME: Send REGISTER_RESP
-
+	device_set_uuid(device, mydevice->id);
 	mydevice->unreg_timeout = NULL;
+	session->trusted = false;
+	session->uuid = l_strdup(mydevice->uuid);
+	session->token = l_strdup(token);
+
+	// TODO: Authenticate device on cloud
+
+	msg_credential_create(&msg, mydevice->uuid, token);
+
+	msg.hdr.type = KNOT_MSG_REG_RSP;
+	msg.result = 0;
+	olen = sizeof(msg);
+	opdu = &msg;
+
+	osent = node_ops->send(session->node_fd, opdu, olen);
+	if (osent < 0) {
+		err = -osent;
+		hal_log_error("[session %p] Can't send register response %s(%d)"
+			      , session, strerror(err), err);
+	}
 }
 
 /*
