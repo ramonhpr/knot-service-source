@@ -20,6 +20,8 @@
 
 import pika
 import logging
+import json
+import secrets
 
 logging.basicConfig(
     format='%(asctime)s %(message)s',
@@ -35,6 +37,9 @@ fog_exchange = 'fog'
 
 EVENT_UNREGISTER = 'device.unregister'
 KEY_UNREGISTERED = 'device.unregistered'
+
+EVENT_REGISTER = 'device.register'
+KEY_REGISTERED = 'device.registered'
 
 EVENT_DATA = 'data.publish'
 
@@ -58,6 +63,12 @@ def callback(ch, method, properties, body):
         message = body
         channel.basic_publish(exchange=fog_exchange,
                               routing_key=KEY_UNREGISTERED, body=message)
+    elif method.routing_key == EVENT_REGISTER:
+        message = json.loads(body)
+        message['token'] = secrets.token_hex(20)
+        del message['name']
+        channel.basic_publish(exchange=fog_exchange,
+                              routing_key=KEY_REGISTERED, body=json.dumps(message))
     elif method.routing_key == EVENT_DATA:
         return
 
