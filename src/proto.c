@@ -92,21 +92,11 @@ static inline bool is_token_valid(const char *token)
 	return strlen(token) == KNOT_PROTOCOL_TOKEN_LEN;
 }
 
-static bool device_id_cmp(const void *a, const void *b)
-{
-	const struct mydevice *mydevice1 = a;
-	const struct mydevice *mydevice2 = b;
-
-	return strcmp(mydevice1->id, mydevice2->id) == 0 ? true:false;
-}
-
+// TODO: substitute this timeout to use amqp cloud API
 static void timeout_callback(struct l_timeout *timeout, void *user_data)
 {
 	struct proto_proxy *proxy = user_data;
 	struct l_queue *list;
-	struct l_queue *registered_list;
-	struct mydevice *mydevice1;
-	struct mydevice *mydevice2;
 	json_raw_t json;
 	int err;
 
@@ -122,34 +112,9 @@ static void timeout_callback(struct l_timeout *timeout, void *user_data)
 	/* List containing all devices returned from cloud */
 	list = parser_mydevices_to_list(json.data);
 
-	registered_list = l_queue_new();
-
-	/*
-	 * Detecting added devices. At the END of the loop:
-	 * device_list: contains removed from cloud
-	 * registered_list: all devices read from cloud
-	 * added_list: new devices at cloud
-	 */
-	for (mydevice1 = l_queue_pop_head(list);
-	     mydevice1; mydevice1 = l_queue_pop_head(list)) {
-		mydevice2 = l_queue_remove_if(proxy->device_list,
-					 device_id_cmp, mydevice1);
-
-		if (mydevice2 == NULL) {
-			/* New device */
-			l_queue_push_tail(registered_list, mydevice1);
-		} else { /* Still registered */
-			l_queue_push_tail(registered_list, mydevice2);
-			mydevice_free(mydevice1);
-		}
-	}
-
-	/* list is empty: destroy */
-	l_queue_destroy(list, NULL);
-	l_queue_destroy(proxy->device_list, NULL);
+	l_queue_destroy(list, (l_queue_destroy_func_t) mydevice_free);
 
 	/* Overwrite: Keep a copy for the next iteration */
-	proxy->device_list = registered_list;
 
 	if (proxy->ready_cb && !proxy->ready_once) {
 		proxy->ready_cb(proxy->user_data);
