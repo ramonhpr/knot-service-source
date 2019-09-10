@@ -500,7 +500,7 @@ static void msg_register_get_device_name(const knot_msg_register *kreq,
 static void msg_credential_create(knot_msg_credential *message,
 				  const char *uuid, const char *token)
 {
-	memcpy(message->uuid, uuid, sizeof(message->uuid));
+	memcpy(message->uuid, uuid, KNOT_ID_LEN);
 	memcpy(message->token, token, sizeof(message->token));
 
 	/* Payload length includes the result, UUID and TOKEN */
@@ -635,9 +635,7 @@ static int8_t msg_auth(struct session *session,
 	session->rollback = 0; /* Rollback disabled */
 
 	if (result != 0) {
-		l_free(session->uuid);
 		l_free(session->token);
-		session->uuid = NULL;
 		session->token = NULL;
 		return result;
 	}
@@ -1315,7 +1313,7 @@ static void on_device_added(const char *device_id, const char *token,
 			return;
 	}
 
-	device_set_uuid(device, mydevice->id);
+	device_set_uuid(device, mydevice->uuid);
 	mydevice->unreg_timeout = NULL;
 	session->trusted = false;
 	session->uuid = l_strdup(mydevice->uuid);
@@ -1323,10 +1321,10 @@ static void on_device_added(const char *device_id, const char *token,
 
 	// TODO: Authenticate device on cloud
 
+	memset(&msg, 0, sizeof(msg));
 	msg_credential_create(&msg, mydevice->uuid, token);
 
 	msg.hdr.type = KNOT_MSG_REG_RSP;
-	msg.result = 0;
 	olen = sizeof(msg);
 	opdu = &msg;
 
