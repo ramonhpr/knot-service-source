@@ -28,6 +28,10 @@ typedef void (*cloud_device_removed_cb_t) (const char *device_id,
 typedef void (*cloud_device_added_cb_t) (const char *device_id,
 					 const char *token,
 					 void *user_data);
+
+typedef void (*cloud_devices_cb_t) (const struct l_queue *devices,
+				      void *user_data);
+
 int cloud_set_cbs(cloud_downstream_cb_t on_update,
 		  cloud_downstream_cb_t on_request,
 		  cloud_device_removed_cb_t on_removed,
@@ -41,3 +45,4 @@ int cloud_publish_data(const char *id, uint8_t sensor_id,
 		       uint8_t kval_len);
 int cloud_unregister_device(const char *id);
 int cloud_register_device(const char *id, const char *name);
+int cloud_list_devices(cloud_devices_cb_t on_listed);

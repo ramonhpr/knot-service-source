@@ -52,17 +52,20 @@
 #define AMQP_EVENT_DATA_REQUEST "data.request"
 #define AMQP_EVENT_DEVICE_UNREGISTERED "device.unregistered"
 #define AMQP_EVENT_DEVICE_REGISTERED "device.registered"
+#define AMQP_EVENT_DEVICE_LIST "device.list"
 
  /* Northbound traffic (control, measurements) */
 #define AMQP_CMD_DATA_PUBLISH "data.publish"
 #define AMQP_CMD_DEVICE_UNREGISTER "device.unregister"
 #define AMQP_CMD_DEVICE_REGISTER "device.register"
+#define AMQP_CMD_DEVICE_LIST "device.cmd.list"
 
 struct cloud_callbacks {
 	cloud_downstream_cb_t update_cb;
 	cloud_downstream_cb_t request_cb;
 	cloud_device_removed_cb_t removed_cb;
 	cloud_device_added_cb_t added_cb;
+	cloud_devices_cb_t listed_cb;
 };
 
 static struct cloud_callbacks cloud_cbs;
@@ -137,8 +140,33 @@ static bool cloud_receive_message(const char *exchange,
 		cloud_cbs.added_cb(id, token, user_data);
 	}
 
+	if (cloud_cbs.listed_cb != NULL &&
+	    strcmp(AMQP_EVENT_DEVICE_LIST, routing_key) == 0) {
+		cloud_cbs.listed_cb = NULL;
+	}
+
 	json_object_put(jso);
 	return true;
+}
+
+int cloud_list_devices(cloud_devices_cb_t on_listed)
+{
+	json_object *jobj_empty;
+	const char *json_str;
+	int result;
+
+	cloud_cbs.listed_cb = on_listed;
+	jobj_empty = json_object_new_object();
+	json_str = json_object_to_json_string(jobj_empty);
+	result = amqp_publish_persistent_message(AMQP_EXCHANGE_CLOUD,
+						 AMQP_CMD_DEVICE_LIST,
+						 json_str);
+	if (result < 0)
+		result = KNOT_ERR_CLOUD_FAILURE;
+
+	json_object_put(jobj_empty);
+
+	return result;
 }
 
 int cloud_register_device(const char *id, const char *name)
@@ -212,6 +240,7 @@ int cloud_set_cbs(cloud_downstream_cb_t on_update,
 		AMQP_EVENT_DATA_REQUEST,
 		AMQP_EVENT_DEVICE_UNREGISTERED,
 		AMQP_EVENT_DEVICE_REGISTERED,
+		AMQP_EVENT_DEVICE_LIST,
 		NULL
 	};
 	amqp_bytes_t queue_fog;
