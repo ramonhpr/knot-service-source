@@ -83,6 +83,20 @@ static const char *get_token_from_jobj(json_object *jso)
 	return json_object_get_string(jobjkey);
 }
 
+static void mydevice_free(void *data)
+{
+	struct mydevice *mydevice = data;
+
+	if (unlikely(!mydevice))
+		return;
+
+	l_free(mydevice->id);
+	l_free(mydevice->uuid);
+	l_free(mydevice->name);
+	l_timeout_remove(mydevice->unreg_timeout);
+	l_free(mydevice);
+}
+
 static bool cloud_receive_message(const char *exchange,
 				  const char *routing_key,
 				  const char *body, void *user_data)
@@ -98,6 +112,17 @@ static bool cloud_receive_message(const char *exchange,
 	jso = json_tokener_parse(body);
 	if (!jso)
 		return false;
+
+	if (cloud_cbs.listed_cb != NULL &&
+	    strcmp(AMQP_EVENT_DEVICE_LIST, routing_key) == 0) {
+		list = parser_mydevices_to_list(body);
+		if (!l_queue_isempty(list))
+			cloud_cbs.listed_cb(list, user_data);
+
+		l_queue_destroy(list, mydevice_free);
+		cloud_cbs.listed_cb = NULL;
+		goto done;
+	}
 
 	if (!json_object_object_get_ex(jso, "id", &id_json))
 		return false;
@@ -140,11 +165,7 @@ static bool cloud_receive_message(const char *exchange,
 		cloud_cbs.added_cb(id, token, user_data);
 	}
 
-	if (cloud_cbs.listed_cb != NULL &&
-	    strcmp(AMQP_EVENT_DEVICE_LIST, routing_key) == 0) {
-		cloud_cbs.listed_cb = NULL;
-	}
-
+done:
 	json_object_put(jso);
 	return true;
 }

@@ -1408,6 +1408,13 @@ static void proxy_ready(void *user_data)
 		proxy_enabled = true;
 }
 
+static void on_devices_listed(const struct l_queue *devices, void *user_data)
+{
+	hal_log_dbg("Devices listed");
+	// TODO: create devices in DBus
+	proxy_ready(user_data);
+}
+
 static void start_timeout(struct l_timeout *timeout, void *user_data)
 {
 	struct settings *settings = user_data;
@@ -1426,9 +1433,7 @@ static void start_timeout(struct l_timeout *timeout, void *user_data)
 	/* Keep a reference to a valid credential */
 	owner_uuid = settings->uuid;
 	/* Step1: Getting Cloud (device) proxies using owner credential */
-	proto_set_proxy_handlers(sock,
-				 proxy_ready,
-				 settings);
+	cloud_list_devices(on_devices_listed);
 
 	/* Last operation: Enable if cloud is connected & authenticated */
 	node_start(session_accept_cb);
