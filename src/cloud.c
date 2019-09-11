@@ -42,6 +42,7 @@
 #include "cloud.h"
 
 #define AMQP_QUEUE_FOG "fog-messages"
+#define AMQP_QUEUE_CLOUD "cloud-messages"
 
 /* Exchanges */
 #define AMQP_EXCHANGE_FOG "fog"
@@ -172,6 +173,7 @@ done:
 
 int cloud_list_devices(cloud_devices_cb_t on_listed)
 {
+	amqp_bytes_t queue_cloud;
 	json_object *jobj_empty;
 	const char *json_str;
 	int result;
@@ -179,38 +181,59 @@ int cloud_list_devices(cloud_devices_cb_t on_listed)
 	cloud_cbs.listed_cb = on_listed;
 	jobj_empty = json_object_new_object();
 	json_str = json_object_to_json_string(jobj_empty);
-	result = amqp_publish_persistent_message(AMQP_EXCHANGE_CLOUD,
+
+	queue_cloud = amqp_declare_new_queue(AMQP_QUEUE_CLOUD);
+	if (queue_cloud.bytes == NULL) {
+		hal_log_error("Error on declare a new queue.\n");
+		return -1;
+	}
+
+	result = amqp_publish_persistent_message(queue_cloud,
+						 AMQP_EXCHANGE_CLOUD,
 						 AMQP_CMD_DEVICE_LIST,
 						 json_str);
 	if (result < 0)
 		result = KNOT_ERR_CLOUD_FAILURE;
 
 	json_object_put(jobj_empty);
+	amqp_bytes_free(queue_cloud);
 
 	return result;
 }
 
 int cloud_register_device(const char *id, const char *name)
 {
+	amqp_bytes_t queue_cloud;
 	json_object *jobj_device;
 	const char *json_str;
 	int result;
 
 	jobj_device = parser_device_json_create(id, name);
 	json_str = json_object_to_json_string(jobj_device);
-	result = amqp_publish_persistent_message(AMQP_EXCHANGE_CLOUD,
+
+	queue_cloud = amqp_declare_new_queue(AMQP_QUEUE_CLOUD);
+	if (queue_cloud.bytes == NULL) {
+		hal_log_error("Error on declare a new queue.\n");
+		return -1;
+	}
+
+
+	result = amqp_publish_persistent_message(queue_cloud,
+						 AMQP_EXCHANGE_CLOUD,
 						 AMQP_CMD_DEVICE_REGISTER,
 						 json_str);
 	if (result < 0)
 		result = KNOT_ERR_CLOUD_FAILURE;
 
 	json_object_put(jobj_device);
+	amqp_bytes_free(queue_cloud);
 
 	return result;
 }
 
 int cloud_unregister_device(const char *id)
 {
+	amqp_bytes_t queue_cloud;
 	json_object *jobj;
 	const char *json_str;
 	int result;
@@ -219,12 +242,19 @@ int cloud_unregister_device(const char *id)
 	json_object_object_add(jobj, "id", json_object_new_string(id));
 	json_str = json_object_to_json_string(jobj);
 
-	result = amqp_publish_persistent_message(
+	queue_cloud = amqp_declare_new_queue(AMQP_QUEUE_CLOUD);
+	if (queue_cloud.bytes == NULL) {
+		hal_log_error("Error on declare a new queue.\n");
+		return -1;
+	}
+
+	result = amqp_publish_persistent_message(queue_cloud,
 		AMQP_EXCHANGE_CLOUD, AMQP_CMD_DEVICE_UNREGISTER, json_str);
 	if (result < 0)
 		return KNOT_ERR_CLOUD_FAILURE;
 
 	json_object_put(jobj);
+	amqp_bytes_free(queue_cloud);
 
 	return 0;
 }
@@ -233,6 +263,7 @@ int cloud_publish_data(const char *id, uint8_t sensor_id, uint8_t value_type,
 		       const knot_value_type *value,
 		       uint8_t kval_len)
 {
+	amqp_bytes_t queue_cloud;
 	json_object *jobj_data;
 	const char *json_str;
 	int result;
@@ -240,13 +271,22 @@ int cloud_publish_data(const char *id, uint8_t sensor_id, uint8_t value_type,
 	jobj_data = parser_data_create_object(id, sensor_id, value_type, value,
 				       kval_len);
 	json_str = json_object_to_json_string(jobj_data);
-	result = amqp_publish_persistent_message(AMQP_EXCHANGE_CLOUD,
+
+	queue_cloud = amqp_declare_new_queue(AMQP_QUEUE_CLOUD);
+	if (queue_cloud.bytes == NULL) {
+		hal_log_error("Error on declare a new queue.\n");
+		return -1;
+	}
+
+	result = amqp_publish_persistent_message(queue_cloud,
+						 AMQP_EXCHANGE_CLOUD,
 						 AMQP_CMD_DATA_PUBLISH,
 						 json_str);
 	if (result < 0)
 		result = KNOT_ERR_CLOUD_FAILURE;
 
 	json_object_put(jobj_data);
+	amqp_bytes_free(queue_cloud);
 	return result;
 }
 

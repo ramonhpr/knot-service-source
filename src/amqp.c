@@ -209,7 +209,8 @@ static int start_connection(struct settings *settings)
 	return 0;
 }
 
-int8_t amqp_publish_persistent_message(const char *exchange,
+int8_t amqp_publish_persistent_message(amqp_bytes_t queue,
+				       const char *exchange,
 				       const char *routing_keys,
 				       const char *body)
 {
@@ -233,6 +234,18 @@ int8_t amqp_publish_persistent_message(const char *exchange,
 		return -1;
 	}
 
+	/* Bind exchange to keep messages */
+	amqp_queue_bind(amqp_ctx.conn, 1, queue,
+			amqp_cstring_bytes(exchange),
+			amqp_cstring_bytes(routing_keys),
+			amqp_empty_table);
+
+	if (amqp_get_rpc_reply(amqp_ctx.conn).reply_type !=
+			       AMQP_RESPONSE_NORMAL) {
+		hal_log_error("Error while binding queue");
+		return -1;
+	}
+
 	props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG |
 			AMQP_BASIC_DELIVERY_MODE_FLAG;
 	props.content_type = amqp_cstring_bytes("text/plain");
@@ -246,6 +259,7 @@ int8_t amqp_publish_persistent_message(const char *exchange,
 	if (rc < 0)
 		hal_log_error("amqp_basic_publish(): %s",
 				amqp_error_string2(rc));
+
 	return rc;
 }
 
