@@ -41,6 +41,9 @@ KEY_UNREGISTERED = 'device.unregistered'
 EVENT_REGISTER = 'device.register'
 KEY_REGISTERED = 'device.registered'
 
+EVENT_LIST = 'device.cmd.list'
+KEY_LIST_DEVICES = 'device.list'
+
 EVENT_DATA = 'data.publish'
 
 channel.exchange_declare(exchange=fog_exchange, durable=True,
@@ -48,11 +51,13 @@ exchange_type='topic')
 channel.exchange_declare(exchange=cloud_exchange, durable=True,
 exchange_type='topic')
 
-result = channel.queue_declare('', exclusive=True)
+result = channel.queue_declare('cloud-messages', exclusive=False, durable=True)
 queue_name = result.method.queue
 
 channel.queue_bind(
         exchange=cloud_exchange, queue=queue_name, routing_key='device.*')
+channel.queue_bind(
+        exchange=cloud_exchange, queue=queue_name, routing_key='device.cmd.list')
 channel.queue_bind(
         exchange=cloud_exchange, queue=queue_name, routing_key='data.*')
 
@@ -69,6 +74,31 @@ def callback(ch, method, properties, body):
         del message['name']
         channel.basic_publish(exchange=fog_exchange,
                               routing_key=KEY_REGISTERED, body=json.dumps(message))
+    elif method.routing_key == EVENT_LIST:
+        message = [
+        {
+            'id': secrets.token_hex(8),
+            'name': 'test',
+            'schema': [{
+                "sensor_id": 0,
+                "value_type": 3,
+                "unit": 0,
+                "type_id": 65521,
+                "name": "LED"
+            }]
+        },{
+            'id': secrets.token_hex(8),
+            'name': 'test2',
+            'schema': [{
+                "sensor_id": 0,
+                "value_type": 3,
+                "unit": 0,
+                "type_id": 65521,
+                "name": "LED"
+            }]
+        }]
+        channel.basic_publish(exchange=fog_exchange,
+                              routing_key=KEY_LIST_DEVICES, body=json.dumps(message))
     elif method.routing_key == EVENT_DATA:
         return
 
