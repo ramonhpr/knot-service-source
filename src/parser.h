@@ -19,11 +19,12 @@
  *
  */
 struct mydevice {
-       char *id;
-       char *uuid;
-       char *name;
-       bool online;
-       struct l_timeout *unreg_timeout;
+	char *id;
+	char *uuid;
+	char *name;
+	bool online;
+	struct l_queue *schema;
+	struct l_timeout *unreg_timeout;
 };
 
 int parser_device(const char *json_str, char *uuid, char *token);
