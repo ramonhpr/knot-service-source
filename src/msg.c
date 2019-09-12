@@ -156,6 +156,7 @@ static void mydevice_free(void *data)
 	if (unlikely(!mydevice))
 		return;
 
+	l_queue_destroy(mydevice->schema, l_free);
 	l_free(mydevice->id);
 	l_free(mydevice->uuid);
 	l_free(mydevice->name);
@@ -1408,10 +1409,23 @@ static void proxy_ready(void *user_data)
 		proxy_enabled = true;
 }
 
+static void create_device(void *data, void *user_data)
+{
+	const struct mydevice *mydevice = data;
+	bool registered = mydevice->schema != NULL;
+	struct knot_device *device;
+
+	device = device_create(mydevice->id, mydevice->name, true, registered,
+			       false);
+	if (device)
+		device_set_uuid(device, mydevice->uuid);
+
+	l_queue_push_head(device_id_list, (struct mydevice *)mydevice);
+}
+
 static void on_devices_listed(const struct l_queue *devices, void *user_data)
 {
-	hal_log_dbg("Devices listed");
-	// TODO: create devices in DBus
+	l_queue_foreach((struct l_queue *)devices, create_device, NULL);
 	proxy_ready(user_data);
 }
 

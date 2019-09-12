@@ -84,20 +84,6 @@ static const char *get_token_from_jobj(json_object *jso)
 	return json_object_get_string(jobjkey);
 }
 
-static void mydevice_free(void *data)
-{
-	struct mydevice *mydevice = data;
-
-	if (unlikely(!mydevice))
-		return;
-
-	l_free(mydevice->id);
-	l_free(mydevice->uuid);
-	l_free(mydevice->name);
-	l_timeout_remove(mydevice->unreg_timeout);
-	l_free(mydevice);
-}
-
 static bool cloud_receive_message(const char *exchange,
 				  const char *routing_key,
 				  const char *body, void *user_data)
@@ -120,7 +106,7 @@ static bool cloud_receive_message(const char *exchange,
 		if (!l_queue_isempty(list))
 			cloud_cbs.listed_cb(list, user_data);
 
-		l_queue_destroy(list, mydevice_free);
+		l_queue_destroy(list, NULL);
 		cloud_cbs.listed_cb = NULL;
 		goto done;
 	}
