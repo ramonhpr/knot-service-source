@@ -102,6 +102,17 @@ static char *amqp_bytes_to_new_string(amqp_bytes_t data)
 	return str;
 }
 
+static int requeue_envelope(const amqp_envelope_t envelope)
+{
+	int err;
+
+	err = amqp_basic_reject(amqp_ctx.conn, 1,
+				envelope.delivery_tag, 1 /* requeue */);
+	if (err < 0)
+		hal_log_error("amqp_basic_reject: %s", amqp_error_string2(err));
+	return err;
+}
+
 /**
  * Callback function to consume message envelope from AMQP queue.
  *
@@ -145,9 +156,14 @@ static bool on_receive(struct l_io *io, void *user_data)
 	body = amqp_bytes_to_new_string(envelope.message.body);
 
 	success = amqp_ctx.read_cb(exchange, routing_key, body, user_data);
-	if (!success)
-		/* TODO: Add the msg on the queue again */
+	if (!success) {
 		hal_log_dbg("Message envelope not consumed");
+		if (requeue_envelope(envelope) < 0)
+			hal_log_error("Unable to requeue envelope");
+	} else {
+		amqp_basic_ack(amqp_ctx.conn, 1, envelope.delivery_tag,
+			       0 /* multiple */);
+	}
 
 	hal_log_dbg("Destroy received envelope");
 	amqp_destroy_envelope(&envelope);
@@ -360,7 +376,7 @@ int amqp_set_queue_to_consume(amqp_bytes_t queue,
 			queue,
 			amqp_empty_bytes,
 			0, /* no_local */
-			1, /* no_ack */
+			0, /* no_ack */
 			0, /* exclusive */
 			amqp_empty_table);
 
