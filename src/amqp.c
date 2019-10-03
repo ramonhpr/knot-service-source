@@ -41,6 +41,8 @@
 #include "amqp.h"
 
 #define AMQP_CONNECTION_TIMEOUT_US 10000
+#define QUEUE_PROP_TTL_PER_MSG "x-message-ttl"
+#define TTL_PER_MSG_MS 5000
 
 struct amqp_context {
 	amqp_connection_state_t conn;
@@ -310,6 +312,14 @@ amqp_bytes_t amqp_declare_new_queue(const char *name)
 {
 	amqp_bytes_t queue;
 	amqp_queue_declare_ok_t *r;
+	amqp_rpc_reply_t reply;
+	amqp_table_t args;
+
+	args.num_entries = 1;
+	args.entries = l_new(amqp_table_entry_t, args.num_entries);
+	args.entries[0].key = amqp_cstring_bytes(QUEUE_PROP_TTL_PER_MSG);
+	args.entries[0].value.kind = AMQP_FIELD_KIND_I64;
+	args.entries[0].value.value.i64 = TTL_PER_MSG_MS;
 
 	r = amqp_queue_declare(amqp_ctx.conn, 1,
 			amqp_cstring_bytes(name),
@@ -317,14 +327,18 @@ amqp_bytes_t amqp_declare_new_queue(const char *name)
 			1, /* durable */
 			0, /* exclusive */
 			0, /* auto-delete */
-			amqp_empty_table);
+			args);
 
-	if (amqp_get_rpc_reply(amqp_ctx.conn).reply_type !=
-			       AMQP_RESPONSE_NORMAL) {
-		hal_log_error("Error declaring queue name");
+	reply = amqp_get_rpc_reply(amqp_ctx.conn);
+	if (reply.reply_type !=  AMQP_RESPONSE_NORMAL) {
+		hal_log_error("Error declaring queue");
+		hal_log_error("%s", amqp_rpc_reply_string(reply));
+		l_free(args.entries);
 		queue.bytes = NULL;
+		return queue;
 	}
 
+	l_free(args.entries);
 	queue = amqp_bytes_malloc_dup(r->queue);
 	if (queue.bytes == NULL)
 		hal_log_error("Out of memory while copying queue buffer");
