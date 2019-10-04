@@ -43,6 +43,8 @@
 #define AMQP_CONNECTION_TIMEOUT_US 10000
 #define QUEUE_PROP_TTL_PER_MSG "x-message-ttl"
 #define TTL_PER_MSG_MS 5000
+#define QUEUE_PROP_DLX "x-dead-letter-exchange"
+#define DLX_NAME "dlx"
 
 struct amqp_context {
 	amqp_connection_state_t conn;
@@ -315,11 +317,14 @@ amqp_bytes_t amqp_declare_new_queue(const char *name)
 	amqp_rpc_reply_t reply;
 	amqp_table_t args;
 
-	args.num_entries = 1;
+	args.num_entries = 2;
 	args.entries = l_new(amqp_table_entry_t, args.num_entries);
 	args.entries[0].key = amqp_cstring_bytes(QUEUE_PROP_TTL_PER_MSG);
 	args.entries[0].value.kind = AMQP_FIELD_KIND_I64;
 	args.entries[0].value.value.i64 = TTL_PER_MSG_MS;
+	args.entries[1].key = amqp_cstring_bytes(QUEUE_PROP_DLX);
+	args.entries[1].value.kind = AMQP_FIELD_KIND_UTF8;
+	args.entries[1].value.value.bytes = amqp_cstring_bytes(DLX_NAME);
 
 	r = amqp_queue_declare(amqp_ctx.conn, 1,
 			amqp_cstring_bytes(name),
@@ -366,6 +371,15 @@ int amqp_set_queue_to_consume(amqp_bytes_t queue,
 	/* Declare the exchange as durable */
 	amqp_exchange_declare(amqp_ctx.conn, 1,
 			amqp_cstring_bytes(exchange),
+			amqp_cstring_bytes("topic"),
+			0 /* passive*/,
+			1 /* durable */,
+			0 /* auto_delete*/,
+			0 /* internal */,
+			amqp_empty_table);
+
+	amqp_exchange_declare(amqp_ctx.conn, 1,
+			amqp_cstring_bytes(DLX_NAME),
 			amqp_cstring_bytes("topic"),
 			0 /* passive*/,
 			1 /* durable */,
