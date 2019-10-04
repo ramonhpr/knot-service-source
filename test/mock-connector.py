@@ -128,7 +128,11 @@ def __amqp_start():
 # Parser sub-commands
 def msg_consume(args):
     channel = __amqp_start()
-    result = channel.queue_declare(QUEUE_CLOUD_NAME, exclusive=False, durable=True)
+    result = channel.queue_declare(QUEUE_CLOUD_NAME, exclusive=False,
+                                    durable=True,
+                                    arguments={
+                                    'x-message-ttl' : 5000,
+                                    'x-dead-letter-exchange': 'dlx'})
     queue_name = result.method.queue
 
     channel.queue_bind(
