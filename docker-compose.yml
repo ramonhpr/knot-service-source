@@ -1,0 +1,27 @@
+version: '3'
+services:
+  knotd:
+    build: .
+    depends_on:
+      - 'rabbitmq'
+    container_name: knot-service
+    security_opt:
+      - seccomp=unconfined
+    tmpfs:
+      - /run
+      - /run/lock
+    ports:
+      - '8884:8884'
+      - '8886:8886'
+      - '55556:55556'
+    expose:
+      - 8884
+      - 8886
+      - 55556
+  rabbitmq:
+    image: rabbitmq:latest
+    container_name: rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "15672:15672"
+      - "5672:5672"
