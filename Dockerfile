@@ -1,4 +1,4 @@
-FROM solita/ubuntu-systemd:latest
+FROM frolvlad/alpine-gcc:latest AS builder
 
 # build arguments
 ARG GLIB_VERSION=2.56.1
@@ -12,24 +12,20 @@ ENV RABBITMQ_HOSTNAME rabbitmq
 ENV RABBITMQ_PORT 5672
 
 # install dependencies
-RUN apt-get update \
- && apt-get install -y \
-       wget apt-transport-https \
-       pkg-config autoconf automake libtool
-
-RUN apt-get install -y \
-      dbus libdbus-1-dev docker.io
+RUN apk update && apk add --no-cache \
+       wget \
+       pkgconfig autoconf automake libtool dbus dbus-dev
 
 WORKDIR /usr/local
 # install glib dependency
-RUN apt-get update \
- && apt-get install -y \
-       zlib1g-dev libffi-dev libmount-dev libpcre3-dev gettext python
+RUN apk add --no-cache \
+      glib-dev
+       #zlib-dev musl libintl gettext-dev libffi-dev libmount pcre-dev python
 
-RUN mkdir -p /usr/local/glib
-RUN wget -q --progress=bar -O- https://github.com/GNOME/glib/archive/$GLIB_VERSION.tar.gz| tar xz -C /usr/local/glib --strip-components=1
-RUN cd glib && ./autogen.sh && ./configure -q && make install
-
+# RUN mkdir -p /usr/local/glib
+# RUN wget -q --progress=bar -O- https://github.com/GNOME/glib/archive/$GLIB_VERSION.tar.gz| tar xz -C /usr/local/glib --strip-components=1
+# RUN cd glib && ./autogen.sh && ./configure --disable-dependency-tracking -q && make install
+RUN apk add --no-cache file make
 # install json-c dependency
 RUN mkdir -p /usr/local/jsonc
 RUN wget -q -O- https://github.com/json-c/json-c/archive/json-c-$JSONC_VERSION.tar.gz | tar xz -C /usr/local/jsonc --strip-components=1
@@ -41,8 +37,8 @@ RUN wget -q -O- https://mirrors.edge.kernel.org/pub/linux/libs/ell/ell-$LIBELL_V
 RUN cd ell && ./configure --prefix=/usr && make install
 
 #install librabbitmq-c
-RUN apt-get install -y \
-      cmake libssl-dev
+RUN apk add --no-cache \
+      cmake openssl-dev
 RUN mkdir -p /usr/local/rabbitmq-c
 RUN wget -q -O- https://github.com/alanxz/rabbitmq-c/archive/$RABBITMQC_VERSION.tar.gz|tar xz -C /usr/local/rabbitmq-c --strip-components=1
 RUN cd rabbitmq-c && mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX=/usr .. && make install
@@ -65,9 +61,14 @@ COPY ./docker/system.conf /usr/share/dbus-1/system.conf
 COPY ./src/knot.conf /etc/dbus-1/system.d
 
 # generate Makefile
-RUN ./bootstrap-configure
+RUN PKG_CONFIG_PATH=/usr/lib64/pkgconfig ./bootstrap-configure
 
 # build
-RUN make install
+RUN make -i install
+
+# FROM alpine:latest
+
+# COPY from=builder /usr /usr
+
 
 CMD ["./docker/knot-service"]
