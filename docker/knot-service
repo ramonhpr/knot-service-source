@@ -9,4 +9,4 @@ dbus-daemon --system
 
 # run knotd and inetbrd
 inetbrd -n &
-knotd -nr -R amqp://$RABBITMQ_HOST:$RABBITMQ_PORT
+LD_LIBRARY_PATH=/usr/lib64 knotd -nr -R amqp://$RABBITMQ_HOST:$RABBITMQ_PORT

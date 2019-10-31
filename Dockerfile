@@ -29,7 +29,7 @@ RUN apk add --no-cache file make
 # install json-c dependency
 RUN mkdir -p /usr/local/jsonc
 RUN wget -q -O- https://github.com/json-c/json-c/archive/json-c-$JSONC_VERSION.tar.gz | tar xz -C /usr/local/jsonc --strip-components=1
-RUN cd jsonc && ./configure -q && make install
+RUN cd jsonc && ./configure --prefix=/usr -q && make install
 
 # install libell
 RUN mkdir -p /usr/local/ell
@@ -58,17 +58,28 @@ COPY ./ ./
 COPY ./docker/system.conf /usr/share/dbus-1/system.conf
 
 # dbus conf files
-COPY ./src/knot.conf /etc/dbus-1/system.d
+# RUN mkdir -p /etc/dbus-1/system.d/
 
 # generate Makefile
 RUN PKG_CONFIG_PATH=/usr/lib64/pkgconfig ./bootstrap-configure
 
 # build
-RUN make -i install
+RUN make install
 
-# FROM alpine:latest
+FROM alpine:latest
 
-# COPY from=builder /usr /usr
+ENV RABBITMQ_HOSTNAME rabbitmq
+ENV RABBITMQ_PORT 5672
 
+RUN apk add --no-cache dbus
+
+WORKDIR /usr/local
+
+COPY --from=builder /usr/lib/ /usr/lib/
+COPY --from=builder /usr/lib64/ /usr/lib/
+COPY --from=builder /etc/dbus-1/system.d/ /etc/dbus-1/system.d/
+COPY --from=builder /usr/local/src/knotd /usr/bin/knotd
+COPY --from=builder /usr/local/inetbr/inetbrd /usr/bin/inetbrd
+COPY --from=builder /usr/local/docker/knot-service ./docker/knot-service
 
 CMD ["./docker/knot-service"]
