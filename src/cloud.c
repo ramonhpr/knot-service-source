@@ -579,13 +579,12 @@ int cloud_set_read_handler(cloud_cb_t read_handler, void *user_data)
 		}
 	}
 
-	amqp_bytes_free(queue_fog);
-
-	err = mq_set_read_cb(on_cloud_receive_message, user_data);
+	err = mq_set_read_cb(queue_fog, on_cloud_receive_message, user_data);
 	if (err) {
 		hal_log_error("Error on set up read callback\n");
 		return -1;
 	}
+	amqp_bytes_free(queue_fog);
 
 	return 0;
 }
