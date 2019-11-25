@@ -1233,13 +1233,19 @@ static bool handle_schema_updated(struct session *session,
 	msg.hdr.type = KNOT_MSG_SCHM_END_RSP;
 	msg.hdr.payload_len = sizeof(msg.action.result);
 
+	device = device_get(device_id);
+	if (!device) {
+		hal_log_error("Device dbus not found!");
+		return true;
+	}
+
 	if (err) {
 		hal_log_error("%s", err);
 
 		msg.action.result = KNOT_ERR_CLOUD_FAILURE;
 		result = true;
 
-		/* TODO: Send a error signal via D-Bus */
+		device_send_signal_notify(device, err);
 	}
 
 	osent = session->node_ops->send(session->node_fd, &msg,
@@ -1251,9 +1257,7 @@ static bool handle_schema_updated(struct session *session,
 		return result;
 	}
 
-	device = device_get(device_id);
-	if (device)
-		device_set_registered(device, true);
+	device_set_registered(device, true);
 
 	l_queue_foreach(session->schema_list, schema_dup_foreach,
 			mydevice->schema);

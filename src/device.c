@@ -309,6 +309,8 @@ static void device_setup_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "Forget", 0,
 				method_forget, "", "", "");
 
+	l_dbus_interface_signal(interface, "NotifyCloudError", 0, "s", "error");
+
 	if (!l_dbus_interface_property(interface, "Name", 0, "s",
 				       property_get_name,
 				       NULL))
@@ -453,6 +455,27 @@ bool device_set_registered(struct knot_device *device, bool registered)
 				DEVICE_INTERFACE, "Registered");
 
 	return true;
+}
+
+bool device_send_signal_notify(struct knot_device *device, const char *msg)
+{
+	struct l_dbus_message *signal;
+	struct l_dbus_message_builder *builder;
+	struct l_dbus *bus = dbus_get_bus();
+
+
+	signal = l_dbus_message_new_signal(bus, device->path,
+					  DEVICE_INTERFACE, "NotifyCloudError");
+	builder = l_dbus_message_builder_new(signal);
+
+	l_dbus_message_builder_append_basic(builder, 's', msg);
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
+
+	if (signal)
+		l_dbus_send(bus, signal);
+
+	return signal;
 }
 
 bool device_set_paired(struct knot_device *device, bool paired)
