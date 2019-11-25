@@ -568,3 +568,19 @@ bool device_forget(struct knot_device *device)
 
 	return true;
 }
+
+bool device_reply_forget_failed(struct knot_device *device, const char *err)
+{
+	struct l_dbus_message *reply;
+
+	if (!device->msg)
+		return false;
+
+	reply = dbus_error_failed(device->msg, err);
+
+	l_dbus_send(dbus_get_bus(), reply);
+	l_dbus_message_unref(device->msg);
+	device->msg = NULL;
+
+	return true;
+}

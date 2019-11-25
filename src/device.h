@@ -40,3 +40,4 @@ bool device_set_online(struct knot_device *device, bool online);
 
 bool device_forget(struct knot_device *device);
 bool device_send_signal_notify(struct knot_device *device, const char *msg);
+bool device_reply_forget_failed(struct knot_device *device, const char *err);
