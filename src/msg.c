@@ -1057,7 +1057,7 @@ static void forget_if_unknown(struct knot_device *device, void *user_data)
 }
 
 static bool handle_device_added(struct session *session, const char *device_id,
-				const char *token)
+				const char *token, const char *error)
 {
 	struct knot_device *device_dbus = device_get(device_id);
 	struct cloud_device *device_pending = l_queue_find(device_id_list,
@@ -1069,6 +1069,14 @@ static bool handle_device_added(struct session *session, const char *device_id,
 	int err, result;
 
 	node_ops = session->node_ops;
+
+	if (error) {
+		hal_log_error("Receive register error: %s", error);
+		l_queue_remove_if(device_id_list, device_id_cmp,
+			device_pending->id);
+		cloud_device_free(device_pending);
+		goto send;
+	}
 
 	/* Tracks 'proxy' devices that belongs to Cloud. */
 	hal_log_info("Device added: %s", device_id);
@@ -1092,19 +1100,6 @@ static bool handle_device_added(struct session *session, const char *device_id,
 	session->uuid = l_strdup(device_pending->uuid);
 	session->token = l_strdup(token);
 
-	memset(&msg, 0, sizeof(msg));
-	msg_credential_create(&msg, device_pending->uuid, token);
-
-	msg.hdr.type = KNOT_MSG_REG_RSP;
-	olen = sizeof(msg.hdr) + msg.hdr.payload_len;
-
-	osent = node_ops->send(session->node_fd, &msg, olen);
-	if (osent < 0) {
-		err = -osent;
-		hal_log_error("[session %p] Can't send register response %s(%d)"
-			      , session, strerror(err), err);
-	}
-
 	session->device_req_auth = false;
 	result = cloud_auth_device(device_id, session->token);
 	if (result != 0) {
@@ -1113,6 +1108,22 @@ static bool handle_device_added(struct session *session, const char *device_id,
 		session->uuid = NULL;
 		session->token = NULL;
 		return true;
+	}
+
+send:
+	hal_log_dbg("debug: %d", l_queue_length(device_id_list));
+	memset(&msg, 0, sizeof(msg));
+	msg_credential_create(&msg, device_id, token);
+
+	msg.hdr.type = KNOT_MSG_REG_RSP;
+	msg.result = error ? KNOT_ERR_CLOUD_FAILURE : 0;
+	olen = sizeof(msg.hdr) + msg.hdr.payload_len;
+
+	osent = node_ops->send(session->node_fd, &msg, olen);
+	if (osent < 0) {
+		err = -osent;
+		hal_log_error("[session %p] Can't send register response %s(%d)"
+			      , session, strerror(err), err);
 	}
 
 	return true;
@@ -1391,7 +1402,8 @@ static bool on_cloud_receive(const struct cloud_msg *msg, void *user_data)
 		return handle_cloud_msg_downstream(session, msg->list,
 						   append_on_request_list);
 	case REGISTER_MSG:
-		return handle_device_added(session, msg->device_id, msg->token);
+		return handle_device_added(session, msg->device_id, msg->token,
+					   msg->error);
 	case UNREGISTER_MSG:
 		return handle_device_removed(msg->device_id);
 	case AUTH_MSG:
