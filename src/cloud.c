@@ -157,6 +157,7 @@ static struct cloud_msg *create_msg(const char *routing_key, json_object *jso)
 
 	switch (msg->type) {
 	case UPDATE_MSG:
+		msg->error = NULL;
 		msg->device_id = parser_get_key_str_from_json_obj(jso, "id");
 		msg->list = parser_update_to_list(jso);
 		if (!msg->device_id || !msg->list) {
@@ -166,6 +167,7 @@ static struct cloud_msg *create_msg(const char *routing_key, json_object *jso)
 
 		break;
 	case REQUEST_MSG:
+		msg->error = NULL;
 		msg->device_id = parser_get_key_str_from_json_obj(jso, "id");
 		msg->list = parser_request_to_list(jso);
 		if (!msg->device_id || !msg->list) {
@@ -182,6 +184,7 @@ static struct cloud_msg *create_msg(const char *routing_key, json_object *jso)
 			goto err;
 		}
 
+		msg->error = parser_get_key_str_from_json_obj(jso, "error");
 		break;
 	case UNREGISTER_MSG:
 		msg->device_id = parser_get_key_str_from_json_obj(jso, "id");
@@ -190,6 +193,7 @@ static struct cloud_msg *create_msg(const char *routing_key, json_object *jso)
 			goto err;
 		}
 
+		msg->error = parser_get_key_str_from_json_obj(jso, "error");
 		break;
 	case AUTH_MSG:
 		msg->device_id = parser_get_key_str_from_json_obj(jso, "id");
@@ -200,6 +204,7 @@ static struct cloud_msg *create_msg(const char *routing_key, json_object *jso)
 			goto err;
 		}
 
+		msg->error = parser_get_key_str_from_json_obj(jso, "error");
 		break;
 	case SCHEMA_MSG:
 		msg->device_id = parser_get_key_str_from_json_obj(jso, "id");
@@ -219,6 +224,7 @@ static struct cloud_msg *create_msg(const char *routing_key, json_object *jso)
 			goto err;
 		}
 
+		msg->error = parser_get_key_str_from_json_obj(jso, "error");
 		break;
 	default:
 		hal_log_error("Unknown event %s", routing_key);
