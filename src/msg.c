@@ -1285,6 +1285,14 @@ static void proxy_ready(void *user_data)
 		proxy_enabled = true;
 }
 
+static void timeout_list_cb(struct l_timeout *timeout, void *user_data)
+{
+	if (cloud_list_devices() < 0)
+		hal_log_error("cloud_list_devices(): Unable request devices");
+
+	l_timeout_remove(timeout);
+}
+
 static void create_devices_dbus(void *data, void *user_data)
 {
 	const struct cloud_device *mydevice = data;
@@ -1299,8 +1307,14 @@ static void create_devices_dbus(void *data, void *user_data)
 	l_queue_push_head(device_id_list, mydevice_dup(mydevice));
 }
 
-static bool handle_cloud_msg_list(struct l_queue *devices)
+static bool handle_cloud_msg_list(struct l_queue *devices, const char *err)
 {
+	if (err) {
+		hal_log_error("Received List devices error: %s", err);
+		l_timeout_create(3, timeout_list_cb, NULL, NULL);
+		return true;
+	}
+
 	l_queue_foreach(devices, create_devices_dbus, NULL);
 	proxy_ready(NULL);
 
@@ -1386,7 +1400,7 @@ static bool on_cloud_receive(const struct cloud_msg *msg, void *user_data)
 		return handle_schema_updated(session, msg->device_id,
 					     msg->error);
 	case LIST_MSG:
-		return handle_cloud_msg_list(msg->list);
+		return handle_cloud_msg_list(msg->list, msg->error);
 	default:
 		return true;
 	}

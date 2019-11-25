@@ -383,20 +383,24 @@ int8_t parser_config_is_valid(struct l_queue *config_list)
 struct l_queue *parser_queue_from_json_array(json_object *jobj,
 					parser_json_array_item_cb foreach_cb)
 {
-	json_object *jobjentry;
+	json_object *jobjentry, *jarray;
 	struct l_queue *list;
 	void *item;
 	int len;
 	int i;
 
-	if (json_object_get_type(jobj) != json_type_array)
+	jarray = json_object_object_get(jobj, "devices");
+	if (!jarray)
 		return NULL;
 
-	len = json_object_array_length(jobj);
+	if (json_object_get_type(jarray) != json_type_array)
+		return NULL;
+
+	len = json_object_array_length(jarray);
 	list = l_queue_new();
 
 	for (i = 0; i < len; i++) {
-		jobjentry = json_object_array_get_idx(jobj, i);
+		jobjentry = json_object_array_get_idx(jarray, i);
 
 		item = foreach_cb(jobjentry);
 		if (item)
