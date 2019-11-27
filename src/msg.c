@@ -200,19 +200,12 @@ static bool sensor_id_cmp(const void *a, const void *b)
 	return (*val1 == val2 ? true : false);
 }
 
-static bool schema_sensor_id_cmp(const void *entry_data, const void *user_data)
-{
-	const knot_msg_schema *schema = entry_data;
-	unsigned int sensor_id = L_PTR_TO_UINT(user_data);
-
-	return sensor_id == schema->sensor_id;
-}
-
 static knot_msg_schema *schema_find(struct l_queue *schema,
 						unsigned int sensor_id)
 {
-	return l_queue_find(schema,
-			    schema_sensor_id_cmp,
+	return l_queue_find(schema, (l_queue_match_func_t)
+			    ({bool _(const knot_msg_schema *s, const void *id)
+			    { return L_PTR_TO_UINT(id) == s->sensor_id; } _; }),
 			    L_UINT_TO_PTR(sensor_id));
 }
 
@@ -1309,14 +1302,6 @@ static void proxy_ready(void *user_data)
 		proxy_enabled = true;
 }
 
-static void timeout_list_cb(struct l_timeout *timeout, void *user_data)
-{
-	if (cloud_list_devices() < 0)
-		hal_log_error("cloud_list_devices(): Unable request devices");
-
-	l_timeout_remove(timeout);
-}
-
 static void create_devices_dbus(void *data, void *user_data)
 {
 	const struct cloud_device *mydevice = data;
@@ -1335,7 +1320,13 @@ static bool handle_cloud_msg_list(struct l_queue *devices, const char *err)
 {
 	if (err) {
 		hal_log_error("Received List devices error: %s", err);
-		l_timeout_create(3, timeout_list_cb, NULL, NULL);
+		l_timeout_create(3, ({void retry(struct l_timeout *t, void *u)
+		{
+			cloud_list_devices();
+			l_timeout_remove(t);
+		}
+		retry;
+		}), NULL, NULL);
 		return true;
 	}
 
