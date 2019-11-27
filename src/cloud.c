@@ -197,9 +197,7 @@ static struct cloud_msg *create_msg(const char *routing_key, json_object *jso)
 		break;
 	case AUTH_MSG:
 		msg->device_id = parser_get_key_str_from_json_obj(jso, "id");
-		msg->auth = parser_get_key_bool_from_json_obj(jso,
-							      "authenticated");
-		if (!msg->device_id || msg->auth < 0) {
+		if (!msg->device_id) {
 			hal_log_error("Malformed JSON message");
 			goto err;
 		}

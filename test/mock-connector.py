@@ -94,7 +94,7 @@ def __on_msg_received(channel, method, properties, body):
     elif method.routing_key == EVENT_AUTH:
         message = json.loads(body)
         del message['token']
-        message['authenticated'] = True
+        message['error'] = None
         channel.basic_publish(exchange=fog_exchange,
                               routing_key=KEY_AUTH, body=json.dumps(message))
     elif method.routing_key == EVENT_LIST:
