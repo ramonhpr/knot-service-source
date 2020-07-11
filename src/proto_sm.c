@@ -37,14 +37,16 @@ static void to_thing(void *data, void *user_data)
 
 static bool handle_cloud_msg_list(struct l_queue *devices, const char *err)
 {
+	ThingList *list;
 	size_t len = l_queue_length(devices);
-	ThingList *list = l_new(ThingList, 1);
 
 	if (err) {
 		hal_log_error("Received List devices error: %s", err);
+		closure_list(NULL, NULL);
 		return true;
 	}
 
+	list = l_new(ThingList, 1);
 	list->n_things = 0;
 	list->things = l_malloc(sizeof(Thing *) * len);
 	l_queue_foreach(devices, to_thing, list);
@@ -110,7 +112,9 @@ static void proto_sm_list_devices(KnotSm_Service *service,
 					   ThingList_Closure closure,
 					   void *closure_data)
 {
-	cloud_list_devices();
+	if (cloud_list_devices() < 0)
+		closure(NULL, closure_data);
+
 	closure_list = closure;
 }
 

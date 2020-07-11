@@ -50,6 +50,8 @@
 #include "cloud.h"
 #include "proto_sm.h"
 
+#define TIMEOUT_DEVICES_SEC	3 /* Time waiting to request for devices */
+
 struct thing_conn {
 	int refs;
 	struct node_ops *node_ops;
@@ -59,6 +61,7 @@ struct thing_conn {
 };
 bool node_enabled;
 struct l_queue *connections;
+static struct l_timeout *list_timeout;
 
 static struct thing_conn *session_ref(struct thing_conn *session)
 {
@@ -120,14 +123,18 @@ static bool on_acceptedd(struct node_ops *node_ops, int client_socket)
 static void handle_list_device(const ThingList *message, void *closure_data)
 {
 	if (!message) {
+		hal_log_error("Received message null. Retrying to list");
+		l_timeout_modify(list_timeout, TIMEOUT_DEVICES_SEC);
 		return;
 	}
 
+	l_timeout_remove(list_timeout);
+	list_timeout = NULL;
 	for (size_t i = 0; i < message->n_things; i++) {
 		Thing *p = message->things[i];
 		bool registered = p->schema->n_schema_frags > 0;
 		struct knot_device* device_dbus;
-		
+
 		device_dbus = device_create(p->id, p->name, false, true, registered);
 		device_set_uuid(device_dbus, p->id);
 	}
@@ -138,12 +145,18 @@ static void handle_list_device(const ThingList *message, void *closure_data)
 	}
 }
 
-static void when_connected(void *user_data)
+static void list_timeout_cb(struct l_timeout *timeout, void *user_data)
 {
 	KnotSm_Service *ptr = proto_sm_get();
 
 	ptr->list_devices(ptr, NULL, handle_list_device, NULL);
-	hal_log_dbg("msg started");
+}
+
+static void when_connected(void *user_data)
+{
+	list_timeout = l_timeout_create_ms(1, /* start in oneshot */
+				list_timeout_cb,
+				NULL, NULL);
 }
 
 int msg_start(struct settings *settings)
