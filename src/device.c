@@ -25,6 +25,7 @@
 #include "hal/linux_log.h"
 #include <knot/knot_types.h>
 #include <knot/knot_protocol.h>
+#include <knot/knot.pb-c.h>
 
 #include "dbus.h"
 #include "settings.h"

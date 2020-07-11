@@ -44,6 +44,25 @@ PKG_CHECK_MODULES(KNOTPROTO, knotprotocol,
   [AC_MSG_ERROR("knotprotocol missing")])
 AC_SUBST(KNOTPROTO_CFLAGS)
 AC_SUBST(KNOTPROTO_LIBS)
+CFLAGS="$CFLAGS $KNOTPROTO_CFLAGS"
+AC_CHECK_HEADERS([knot/knot.pb-c.h],
+                   [has_protoheader=yes],
+                   [has_protoheader=no])
+if test "x$has_protoheader" == "xyes" ; then
+  PKG_CHECK_MODULES(PROTOBUF, [protobuf >= 3.0.0],
+		    [AC_DEFINE([HAVE_PROTOBUF],[1],[Use PROTOBUF])],
+		    [AC_MSG_ERROR("protobuf 3.0 missing")])
+  AC_SUBST(PROTOBUF_CFLAGS)
+  AC_SUBST(PROTOBUF_LIBS)
+  PKG_CHECK_MODULES(LIBPROTOBUF_C, [libprotobuf-c],
+		    [AC_DEFINE([HAVE_LIBPROTOBUF_C],[1],[Use LIBPROTOBUF_C])],
+		    [AC_MSG_ERROR("libprotobuf-c missing")])
+  AC_SUBST(LIBPROTOBUF_C_CFLAGS)
+  AC_SUBST(LIBPROTOBUF_C_LIBS)
+else
+  AC_MSG_NOTICE(["Not using protobuf"])
+fi
+AM_CONDITIONAL([BUILD_PROTOBUF], [test "x$has_protoheader" == "xyes"])
 
 PKG_CHECK_MODULES(KNOTHAL, hal,
   [AC_DEFINE([HAVE_KNOTHAL],[1],[Use KNOTHAL])],

@@ -31,6 +31,7 @@
 
 #include <knot/knot_types.h>
 #include <knot/knot_protocol.h>
+#include <knot/knot.pb-c.h>
 
 #include <json-c/json.h>
 
@@ -91,7 +92,7 @@ struct l_queue *parser_schema_to_list(const char *json_str)
 {
 	json_object *jobjarray, *jobjentry, *jobjkey;
 	struct l_queue *list;
-	knot_msg_schema *entry;
+	KnotMsgSchemaFrag *entry;
 	int sensor_id, value_type, unit, type_id;
 	uint64_t i;
 	const char *name;
@@ -167,13 +168,12 @@ struct l_queue *parser_schema_to_list(const char *json_str)
 		 * Validation not required: validation has been performed
 		 * previously when schema has been submitted to the cloud.
 		 */
-		entry = l_new(knot_msg_schema, 1);
+		entry = l_new(KnotMsgSchemaFrag, 1);
 		entry->sensor_id = sensor_id;
-		entry->values.value_type = value_type;
-		entry->values.unit = unit;
-		entry->values.type_id = type_id;
-		strncpy(entry->values.name, name,
-						sizeof(entry->values.name) - 1);
+		entry->value_type = value_type;
+		entry->unit = unit;
+		entry->type_id = type_id;
+		entry->name = l_strdup(name);
 
 		l_queue_push_tail(list, entry);
 	}

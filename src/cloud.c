@@ -35,6 +35,7 @@
 #include <amqp.h>
 
 #include <knot/knot_protocol.h>
+#include <knot/knot.pb-c.h>
 
 #include "settings.h"
 #include "mq.h"
@@ -264,8 +265,8 @@ err:
  * Returns true if the message envelope was consumed or returns false otherwise.
  */
 static bool on_cloud_receive_message(const char *exchange,
-				     const char *routing_key,
-				     const char *body, void *user_data)
+			const char *routing_key,
+			const char *body, void *user_data)
 {
 	struct cloud_msg *msg;
 	bool consumed = true;
@@ -322,11 +323,11 @@ int cloud_register_device(const char *id, const char *name)
 	headers[0].value.value.bytes = amqp_cstring_bytes(conf->token);
 
 	result = mq_publish_persistent_message(queue_cloud,
-					       MQ_EXCHANGE_CLOUD,
-					       MQ_CMD_DEVICE_REGISTER,
-					       headers, 1,
-					       MQ_MSG_EXPIRATION_TIME_MS,
-					       json_str);
+				MQ_EXCHANGE_CLOUD,
+				MQ_CMD_DEVICE_REGISTER,
+				headers, 1,
+				MQ_MSG_EXPIRATION_TIME_MS,
+				json_str);
 	if (result < 0)
 		result = KNOT_ERR_CLOUD_FAILURE;
 
@@ -369,11 +370,11 @@ int cloud_unregister_device(const char *id)
 	headers[0].value.value.bytes = amqp_cstring_bytes(conf->token);
 
 	result = mq_publish_persistent_message(queue_cloud,
-					       MQ_EXCHANGE_CLOUD,
-					       MQ_CMD_DEVICE_UNREGISTER,
-					       headers, 1,
-					       MQ_MSG_EXPIRATION_TIME_MS,
-					       json_str);
+				MQ_EXCHANGE_CLOUD,
+				MQ_CMD_DEVICE_UNREGISTER,
+				headers, 1,
+				MQ_MSG_EXPIRATION_TIME_MS,
+				json_str);
 	if (result < 0)
 		return KNOT_ERR_CLOUD_FAILURE;
 
@@ -417,11 +418,11 @@ int cloud_auth_device(const char *id, const char *token)
 	headers[0].value.value.bytes = amqp_cstring_bytes(conf->token);
 
 	result = mq_publish_persistent_message(queue_cloud,
-					       MQ_EXCHANGE_CLOUD,
-					       MQ_CMD_DEVICE_AUTH,
-					       headers, 1,
-					       0, // Set no expiration time
-					       json_str);
+				MQ_EXCHANGE_CLOUD,
+				MQ_CMD_DEVICE_AUTH,
+				headers, 1,
+				0, // Set no expiration time
+				json_str);
 	if (result < 0)
 		result = KNOT_ERR_CLOUD_FAILURE;
 
@@ -463,11 +464,11 @@ int cloud_update_schema(const char *id, struct l_queue *schema_list)
 	headers[0].value.value.bytes = amqp_cstring_bytes(conf->token);
 
 	result = mq_publish_persistent_message(queue_cloud,
-					       MQ_EXCHANGE_CLOUD,
-					       MQ_CMD_SCHEMA_UPDATE,
-					       headers, 1,
-					       MQ_MSG_EXPIRATION_TIME_MS,
-					       json_str);
+				MQ_EXCHANGE_CLOUD,
+				MQ_CMD_SCHEMA_UPDATE,
+				headers, 1,
+				MQ_MSG_EXPIRATION_TIME_MS,
+				json_str);
 	if (result < 0)
 		result = KNOT_ERR_CLOUD_FAILURE;
 
@@ -532,7 +533,7 @@ int cloud_list_devices(void)
  * Returns: 0 if successful and a KNoT error otherwise.
  */
 int cloud_publish_data(const char *id, uint8_t sensor_id, uint8_t value_type,
-		       const knot_value_type *value,
+		       const KnotValueType value,
 		       uint8_t kval_len)
 {
 	amqp_bytes_t queue_cloud;
@@ -546,8 +547,8 @@ int cloud_publish_data(const char *id, uint8_t sensor_id, uint8_t value_type,
 		return -1;
 	}
 
-	jobj_data = parser_data_create_object(id, sensor_id, value_type, value,
-					      kval_len);
+	jobj_data = NULL;//parser_data_create_object(id, sensor_id, value_type, value,
+				//	      kval_len);
 	if (!jobj_data) {
 		amqp_bytes_free(queue_cloud);
 		return KNOT_ERR_CLOUD_FAILURE;
