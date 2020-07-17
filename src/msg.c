@@ -63,7 +63,7 @@ bool node_enabled;
 struct l_queue *connections;
 static struct l_timeout *list_timeout;
 
-static struct thing_conn *session_ref(struct thing_conn *session)
+static struct thing_conn *thing_conn_ref(struct thing_conn *session)
 {
 	if (unlikely(!session))
 		return NULL;
@@ -74,16 +74,179 @@ static struct thing_conn *session_ref(struct thing_conn *session)
 	return session;
 }
 
-static void session_unref(struct thing_conn *session)
+static void session_destroy(struct thing_conn *session)
 {
-	//TODO
+	if (unlikely(!session))
+		return;
+
+	l_io_destroy(session->node_channel);
+
+	if (session->id != NULL)
+		l_free(session->id);
+
+	l_free(session);
+}
+
+static void thing_conn_unref(struct thing_conn *session)
+{
+	if (unlikely(!session))
+		return;
+
+	hal_log_info("session_unref(%p): %d", session, session->refs - 1);
+	if (__sync_sub_and_fetch(&session->refs, 1))
+		return;
+
+	session_destroy(session);
+}
+
+static void handle_device_added(const KnotMsgRegisterRsp *reg_msg,
+						void *closure_data)
+{
+	struct thing_conn *session = closure_data;
+	uint8_t *out;
+	int osent, err;
+	size_t olen;
+
+	olen = knot_msg_register_rsp__get_packed_size(reg_msg);
+	out = l_malloc(olen);
+	knot_msg_register_rsp__pack(reg_msg, out);
+	hal_log_dbg("device added %s %s. Sending %ld bytes", reg_msg->uuid,
+							reg_msg->token, olen);
+
+	osent = session->node_ops->send(session->node_fd, out, olen);
+	if (osent < 0) {
+		err = -osent;
+		hal_log_error("[session %p] Can't send register response %s(%d)"
+			      , session, strerror(err), err);
+	} else if (reg_msg->result == KNOT_STATUS__SUCCESS) {
+		// TODO: start schema roolback
+	}
+
+	l_free(out);
+}
+
+static ssize_t msg_process(struct thing_conn *session,
+				const void *ipdu, size_t ilen,
+				void *opdu, size_t omtu)
+{
+	KnotMsg *msg = knot_msg__unpack(NULL, ilen, ipdu);
+
+	switch (msg->msg_case) {
+	case KNOT_MSG__MSG_REG_REQ:
+		proto_sm_get()->register_thing(proto_sm_get(), msg->reg_req,
+						handle_device_added, session);
+		break;
+	case KNOT_MSG__MSG__NOT_SET:
+	case _KNOT_MSG__MSG_IS_INT_SIZE:
+	case KNOT_MSG__MSG_REG_RSP:
+		break;
+	default:
+		break;
+	}
+
+	knot_msg__free_unpacked(msg, NULL);
+	return 0;
+}
+
+static void session_node_destroy_to(struct l_timeout *timeout,
+					    void *user_data)
+{
+	struct l_io *channel = user_data;
+
+	l_io_destroy(channel);
+}
+
+static void on_node_channel_data_error(struct l_io *channel)
+{
+	static bool destroying = false;
+
+	if (destroying)
+		return;
+
+	destroying = true;
+
+	l_timeout_create(1,
+			 session_node_destroy_to,
+			 channel,
+			 NULL);
+}
+
+static bool session_node_data_cb(struct l_io *channel, void *user_data)
+{
+	struct thing_conn *session = user_data;
+	struct node_ops *node_ops = session->node_ops;
+	uint8_t ipdu[512], opdu[512]; /* FIXME: */
+	ssize_t recvbytes, sentbytes, olen;
+	int node_socket;
+	int err;
+
+	node_socket = l_io_get_fd(channel);
+
+	recvbytes = node_ops->recv(node_socket, ipdu, sizeof(ipdu));
+	if (recvbytes <= 0) {
+		err = errno;
+		hal_log_error("[session %p] readv(): %s(%d)",
+			      session, strerror(err), err);
+		on_node_channel_data_error(channel);
+		return false;
+	}
+
+	/* Blocking: Wait until response from cloud is received */
+	olen = msg_process(session, ipdu, recvbytes, opdu, sizeof(opdu));
+	/* olen: output length or -errno */
+	if (olen < 0) {
+		/* Server didn't reply any error */
+		hal_log_error("[session %p] KNOT IoT cloud error: %s(%zd)",
+			      session, strerror(-olen), -olen);
+		return true;
+	}
+
+	/* If there are no octets to be sent */
+	if (!olen)
+		return true;
+
+	/* Response from the gateway: error or response for the given command */
+	sentbytes = node_ops->send(node_socket, opdu, olen);
+	if (sentbytes < 0)
+		hal_log_error("[session %p] node_ops: %s(%zd)",
+			      session, strerror(-sentbytes), -sentbytes);
+
+	return true;
+}
+
+static void session_node_disconnected_cb(struct l_io *channel, void *user_data)
+{
+
+}
+
+static void session_node_destroy_cb(void *user_data)
+{
+	struct thing_conn *session = user_data;
+
+	thing_conn_unref(session);
 }
 
 static struct l_io *create_node_channel(int node_socket,
 					struct thing_conn *session)
 {
-	// TODO
-	return 0;
+	struct l_io *channel;
+
+	channel = l_io_new(node_socket);
+	if (channel == NULL) {
+		hal_log_error("Can't create node channel");
+		return NULL;
+	}
+
+	l_io_set_close_on_destroy(channel, true);
+
+	l_io_set_read_handler(channel, session_node_data_cb,
+			      session, NULL);
+	l_io_set_disconnect_handler(channel,
+				    session_node_disconnected_cb,
+				    thing_conn_ref(session),
+				    session_node_destroy_cb);
+
+	return channel;
 }
 
 static struct thing_conn *thing_conn_new(struct node_ops *node_ops,
@@ -97,14 +260,14 @@ static struct thing_conn *thing_conn_new(struct node_ops *node_ops,
 	session->node_ops = node_ops;
 	session->node_channel = create_node_channel(client_socket, session);
 	if (session->node_channel == NULL) {
-		session_unref(session);
+		thing_conn_unref(session);
 		return NULL;
 	}
 	session->node_fd = client_socket; /* Required to manage disconnections */
 
 	hal_log_info("[session %p] thing connection created", session);
 
-	return session_ref(session);
+	return thing_conn_ref(session);
 }
 
 static bool on_acceptedd(struct node_ops *node_ops, int client_socket)

@@ -11,6 +11,10 @@
 #define KNOT_PDU_LEN 20
 
 ThingList_Closure closure_list;
+KnotMsgRegisterRsp_Closure closure_reg;
+void *reg_user_data;
+bool auth_inner_call;
+char *cache_token;
 
 static void to_sensor(void *data, void *user_data)
 {
@@ -63,6 +67,54 @@ static bool handle_cloud_msg_list(struct l_queue *devices, const char *err)
 	return true;
 }
 
+static bool handle_cloud_msg_register(const char *device_id,
+				const char *token, const char *error)
+{
+	KnotMsgRegisterRsp msg = KNOT_MSG_REGISTER_RSP__INIT;
+
+	if (error) {
+		msg.result = KNOT_STATUS__ERROR_UNKNOWN;
+		closure_reg(&msg, reg_user_data);
+		return false;
+	}
+
+	auth_inner_call = true;
+	cache_token = l_strdup(token);
+	if (cloud_auth_device(device_id, token) < 0) {
+		msg.result = KNOT_STATUS__CLOUD_OFFLINE;
+		closure_reg(&msg, reg_user_data);
+		return false;
+	}
+
+	return true;
+}
+
+
+static bool handle_inner_auth(const char *device_id, const char *error)
+{
+	KnotMsgRegisterRsp msg = KNOT_MSG_REGISTER_RSP__INIT;
+
+	if (error) {
+		msg.result = KNOT_STATUS__CREDENTIAL_UNAUTHORIZED;
+		closure_reg(&msg, reg_user_data);
+		return false;
+	}
+
+	auth_inner_call = false;
+	msg.uuid = (char *)device_id;
+	msg.token = (char *)cache_token;
+	msg.result = KNOT_STATUS__SUCCESS;
+	closure_reg(&msg, reg_user_data);
+	l_free(cache_token);
+
+	return true;
+}
+
+static bool handle_cloud_auth(const char *device_id, const char *error)
+{
+	return true;
+}
+
 static bool on_cloud_receive(const struct cloud_msg *msg, void *user_data)
 {
 	switch (msg->type) {
@@ -71,8 +123,14 @@ static bool on_cloud_receive(const struct cloud_msg *msg, void *user_data)
 	case UPDATE_MSG:
 	case REQUEST_MSG:
 	case REGISTER_MSG:
-	case SCHEMA_MSG:
+		return handle_cloud_msg_register(msg->device_id, msg->token,
+						msg->error);
 	case AUTH_MSG:
+		if (auth_inner_call)
+			return handle_inner_auth(msg->device_id, msg->error);
+		else
+			return handle_cloud_auth(msg->device_id, msg->error);
+	case SCHEMA_MSG:
 	case UNREGISTER_MSG:
 	default:
 		return true;
@@ -99,12 +157,17 @@ static void proto_sm_register_thing(KnotSm_Service *service,
 						KnotMsgRegisterRsp_Closure closure,
 						void *closure_data)
 {
+	KnotMsgRegisterRsp rsp = KNOT_MSG_REGISTER_RSP__INIT;
 	char id[KNOT_ID_LEN];
-	KnotMsgRegisterRsp output = KNOT_MSG_REGISTER_RSP__INIT;
 
 	snprintf(id, sizeof(id), "%016"PRIx64, input->id);
-	output.uuid = id;
-	closure(&output, closure_data);
+	if (cloud_register_device(id, input->name) < 0) {
+		rsp.result = KNOT_STATUS__CLOUD_OFFLINE;
+		closure(&rsp, closure_data);
+	}
+
+	reg_user_data = closure_data;
+	closure_reg = closure;
 }
 
 static void proto_sm_list_devices(KnotSm_Service *service,
