@@ -1,13 +1,14 @@
-FROM frolvlad/alpine-gcc:latest AS builder
+FROM alpine:3.10 AS builder
 
 # Build arguments
 ARG JSONC_VERSION=0.13.1-20180305
 ARG LIBELL_VERSION=0.28
 ARG RABBITMQC_VERSION=v0.9.0
-ARG KNOT_PROTOCOL_VERSION=KNOT-v02.01-rc01
+ARG KNOT_PROTOCOL_VERSION=protobuf_v3
 ARG KNOT_HAL_VERSION=KNOT-v02.01-rc01
 
 # Install dependencies
+RUN apk add --no-cache gcc musl-dev
 RUN apk update && apk add --no-cache \
        wget \
        pkgconfig \
@@ -17,6 +18,7 @@ RUN apk update && apk add --no-cache \
        dbus dbus-dev \
        glib-dev \
        file \
+       g++ \
        make
 
 WORKDIR /usr/local
@@ -38,10 +40,20 @@ RUN mkdir -p /usr/local/rabbitmq-c
 RUN wget -q -O- https://github.com/alanxz/rabbitmq-c/archive/$RABBITMQC_VERSION.tar.gz|tar xz -C /usr/local/rabbitmq-c --strip-components=1
 RUN cd rabbitmq-c && mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX=/usr .. && make install
 
+# protobuf
+RUN mkdir -p /usr/local/protobuf
+RUN wget -q -O- https://github.com/protocolbuffers/protobuf/releases/download/v3.11.4/protobuf-all-3.11.4.tar.gz|tar xz -C /usr/local/protobuf --strip-components=1
+RUN cd protobuf && ./autogen.sh && ./configure && make install
+
+# libprotobuf-c
+RUN mkdir -p /usr/local/protobuf-c
+RUN wget -q -O- https://github.com/protobuf-c/protobuf-c/releases/download/v1.3.3/protobuf-c-1.3.3.tar.gz|tar xz -C /usr/local/protobuf-c --strip-components=1
+RUN cd protobuf-c && ./configure && make install
+
 # Install knot-protocol
 RUN mkdir -p /usr/local/protocol
-RUN wget -q -O- https://github.com/CESARBR/knot-protocol-source/archive/$KNOT_PROTOCOL_VERSION.tar.gz|tar xz -C /usr/local/protocol --strip-components=1
-RUN cd protocol && ./bootstrap-configure && make install
+RUN wget -q -O- https://github.com/ramonhpr/knot-protocol-source/archive/$KNOT_PROTOCOL_VERSION.tar.gz|tar xz -C /usr/local/protocol --strip-components=1
+RUN cd protocol && ./bootstrap-configure --enable-protobuf && make install
 
 # Install knot-hal
 RUN mkdir -p /usr/local/hal
@@ -72,6 +84,10 @@ COPY --from=builder /usr/lib/libjson-c.so* /usr/lib/
 COPY --from=builder /usr/lib/libjson-c.a* /usr/lib/
 COPY --from=builder /usr/lib/libknotprotocol.so* /usr/lib/
 COPY --from=builder /usr/lib/libknotprotocol.a* /usr/lib/
+COPY --from=builder /usr/local/lib/libprotobuf.so* /usr/lib/
+COPY --from=builder /usr/local/lib/libprotobuf.a* /usr/lib/
+COPY --from=builder /usr/local/lib/libprotobuf-c.so* /usr/lib/
+COPY --from=builder /usr/local/lib/libprotobuf-c.a* /usr/lib/
 COPY --from=builder /usr/lib/libhal.so* /usr/lib/
 COPY --from=builder /usr/lib/libhal.a* /usr/lib/
 COPY --from=builder /usr/lib64/librabbitmq.so* /usr/lib/
