@@ -51,13 +51,16 @@
 #include "proto_sm.h"
 
 #define TIMEOUT_DEVICES_SEC	3 /* Time waiting to request for devices */
+#define ROLLBACK_TICKS		5 /* Equals to 5*1096ms */
 
 struct thing_conn {
 	int refs;
 	struct node_ops *node_ops;
 	struct l_io *node_channel;	/* Radio event source */
 	char *id;
+	char *name;
 	int node_fd;			/* Unix socket */
+	int rollback;
 };
 bool node_enabled;
 struct l_queue *connections;
@@ -84,6 +87,9 @@ static void session_destroy(struct thing_conn *session)
 	if (session->id != NULL)
 		l_free(session->id);
 
+	if (session->name != NULL)
+		l_free(session->name);
+
 	l_free(session);
 }
 
@@ -103,16 +109,23 @@ static void handle_device_added(const KnotMsgRegisterRsp *reg_msg,
 						void *closure_data)
 {
 	struct thing_conn *session = closure_data;
+	struct knot_device *device;
 	uint8_t *out;
 	int osent, err;
 	size_t olen;
 
+	session->id = l_strdup(reg_msg->uuid);
 	olen = knot_msg_register_rsp__get_packed_size(reg_msg);
 	out = l_malloc(olen);
 	knot_msg_register_rsp__pack(reg_msg, out);
 	hal_log_dbg("device added %s %s. Sending %ld bytes", reg_msg->uuid,
 							reg_msg->token, olen);
 
+	device = device_get(reg_msg->uuid);
+	if (!device)
+		device = device_create(session->id, session->name, true, false, true);
+
+	device_set_uuid(device, session->id);
 	osent = session->node_ops->send(session->node_fd, out, olen);
 	if (osent < 0) {
 		err = -osent;
@@ -125,17 +138,51 @@ static void handle_device_added(const KnotMsgRegisterRsp *reg_msg,
 	l_free(out);
 }
 
+static void handle_schema(const KnotMsgSchemaRsp *message,
+                  void *closure_data)
+{
+
+	struct thing_conn *session = closure_data;
+	struct knot_device *device;
+	uint8_t *out;
+	int osent, err;
+	size_t olen;
+
+	olen = knot_msg_schema_rsp__get_packed_size(message);
+	out = l_malloc(olen);
+	knot_msg_schema_rsp__pack(message, out);
+
+	device = device_get(session->id);
+	if (device)
+		device_set_registered(device, true);
+
+	osent = session->node_ops->send(session->node_fd, out, olen);
+	if (osent < 0) {
+		err = -osent;
+		hal_log_error("[session %p] Can't send schema response %s(%d)"
+			      , session, strerror(err), err);
+	}
+
+	l_free(out);
+}
+
 static ssize_t msg_process(struct thing_conn *session,
 				const void *ipdu, size_t ilen,
 				void *opdu, size_t omtu)
 {
 	KnotMsg *msg = knot_msg__unpack(NULL, ilen, ipdu);
 
+	hal_log_dbg("Received %ld bytes", ilen);
+
 	switch (msg->msg_case) {
 	case KNOT_MSG__MSG_REG_REQ:
+		session->name = l_strdup(msg->reg_req->name);
 		proto_sm_get()->register_thing(proto_sm_get(), msg->reg_req,
 						handle_device_added, session);
 		break;
+	case KNOT_MSG__MSG_SCHEMA_REQ:
+		proto_sm_get()->schema(proto_sm_get(), msg->schema_req,
+						handle_schema, session);
 	case KNOT_MSG__MSG__NOT_SET:
 	case _KNOT_MSG__MSG_IS_INT_SIZE:
 	case KNOT_MSG__MSG_REG_RSP:
@@ -216,7 +263,22 @@ static bool session_node_data_cb(struct l_io *channel, void *user_data)
 
 static void session_node_disconnected_cb(struct l_io *channel, void *user_data)
 {
+	struct thing_conn *session = user_data;
+	struct knot_device *device;
 
+	hal_log_info("[session %p] disconnected (node)", session);
+
+	if (session->rollback) {
+		device_destroy(session->id);
+		hal_log_info("[session %p] Removing %s (rollback)",
+			     session, session->id);
+	}
+
+	device = device_get(session->id);
+	if (device)
+		device_set_online(device, false);
+
+	thing_conn_unref(session);
 }
 
 static void session_node_destroy_cb(void *user_data)
@@ -295,8 +357,8 @@ static void handle_list_device(const ThingList *message, void *closure_data)
 	list_timeout = NULL;
 	for (size_t i = 0; i < message->n_things; i++) {
 		Thing *p = message->things[i];
-		bool registered = p->schema->n_schema_frags > 0;
-		struct knot_device* device_dbus;
+		bool registered = p->schema->n_schema > 0;
+		struct knot_device *device_dbus;
 
 		device_dbus = device_create(p->id, p->name, false, true, registered);
 		device_set_uuid(device_dbus, p->id);

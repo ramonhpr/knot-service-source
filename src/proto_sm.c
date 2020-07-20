@@ -19,10 +19,10 @@ char *cache_token;
 static void to_sensor(void *data, void *user_data)
 {
 	Thing *new_thing = user_data;
-	int i = new_thing->schema->n_schema_frags;
+	int i = new_thing->schema->n_schema;
 
-	new_thing->schema[i].schema_frags = data;
-	new_thing->schema->n_schema_frags++;
+	new_thing->schema[i].schema = data;
+	new_thing->schema->n_schema++;
 }
 
 static void to_thing(void *data, void *user_data)
@@ -34,9 +34,14 @@ static void to_thing(void *data, void *user_data)
 	new_thing->id = dev->id;
 	new_thing->name = dev->name;
 	new_thing->online = dev->online;
-	new_thing->schema = l_new(KnotMsgSchema, 1);
+	new_thing->schema = l_new(Schema, 1);
 	l_queue_foreach(dev->schema, to_sensor, new_thing);
 	list->things[list->n_things++] = new_thing;
+}
+
+static struct l_queue *schema_to_queue(Schema schema)
+{
+	return NULL;
 }
 
 static bool handle_cloud_msg_list(struct l_queue *devices, const char *err)
@@ -179,6 +184,14 @@ static void proto_sm_list_devices(KnotSm_Service *service,
 		closure(NULL, closure_data);
 
 	closure_list = closure;
+}
+
+static void proto_sm_schema(KnotSm_Service *service,
+				const KnotMsgSchemaReq *input,
+				KnotMsgSchemaRsp_Closure closure,
+				void *closure_data)
+{
+	cloud_update_schema(input->uuid, schema_to_queue());
 }
 
 KnotSm_Service sm = KNOT_SM__INIT(proto_sm_);

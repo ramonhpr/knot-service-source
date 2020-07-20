@@ -92,7 +92,7 @@ struct l_queue *parser_schema_to_list(const char *json_str)
 {
 	json_object *jobjarray, *jobjentry, *jobjkey;
 	struct l_queue *list;
-	KnotMsgSchemaFrag *entry;
+	SchemaItem *entry;
 	int sensor_id, value_type, unit, type_id;
 	uint64_t i;
 	const char *name;
@@ -168,7 +168,7 @@ struct l_queue *parser_schema_to_list(const char *json_str)
 		 * Validation not required: validation has been performed
 		 * previously when schema has been submitted to the cloud.
 		 */
-		entry = l_new(KnotMsgSchemaFrag, 1);
+		entry = l_new(SchemaItem, 1);
 		entry->sensor_id = sensor_id;
 		entry->value_type = value_type;
 		entry->unit = unit;

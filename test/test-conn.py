@@ -142,3 +142,6 @@ else:
     nbytes = send_knot_msg_auth(s, str(credentials['uuid']), str(credentials['token']))
     if nbytes < 0:
         logging.debug(nbytes)
+
+while True:
+    pass
