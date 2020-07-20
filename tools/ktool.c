@@ -333,6 +333,8 @@ static void read_json_entry(struct json_object *jobj,
 	knot_value_type_bool *kbool;
 	knot_value_type_float *kfloat;
 	knot_value_type_int *kint;
+	knot_value_type_float bla;
+	knot_value_type_int bla2;
 	enum json_type type;
 	const char *str;
 
@@ -349,12 +351,14 @@ static void read_json_entry(struct json_object *jobj,
 			break;
 		case json_type_double:
 			/* FIXME: how to handle overflow? */
-			kfloat = (knot_value_type_float *) &(kvalue->val_f);
+			bla = kvalue->val_f;
+			kfloat = (knot_value_type_float *) &(bla);
 			*kfloat = (float) json_object_get_double(jobj);
 			msg->hdr.payload_len = sizeof(knot_value_type_float);
 			break;
 		case json_type_int:
-			kint = (knot_value_type_int *) &(kvalue->val_i);
+			bla2 = kvalue->val_i;
+			kint = (knot_value_type_int *) &(bla2);
 			*kint = json_object_get_int(jobj);
 			msg->hdr.payload_len = sizeof(knot_value_type_int);
 			break;
